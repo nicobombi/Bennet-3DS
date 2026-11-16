@@ -109,5 +109,32 @@ bool risorse_carica(const char *base) {
         for (int i = 0; i < M->mw * M->mh; i++) M->mini[i] = u16(&l);
     }
     free(b);
+    /* animazioni: erba al vento, acqua dei laghetti, fumo */
+    if ((b = carica_file(base, "anim.dat", &n))) {
+        l = (Let){ b, b + n };
+        if (magia(&l, "VDGA")) {
+            R.gN = u16(&l); R.gF = u8(&l); int np = u16(&l);
+            for (int i = 0; i < np; i++) R.gpal[i] = u16(&l);
+            for (int i = 0; i < np; i++) R.glut[i] = u8(&l);
+            size_t fs = (size_t)R.gN * R.gN; R.gfr = malloc(fs * R.gF); memcpy(R.gfr, l.p, fs * R.gF); l.p += fs * R.gF;
+            for (int k = 1; k < R.gF; k++) for (size_t i = 0; i < fs; i++) R.gfr[k * fs + i] ^= R.gfr[i];
+            /* quali tile contengono colori dell'erba (per saltare subito gli altri) */
+            uint8_t inerba[256] = { 0 }; for (int i = 0; i < np; i++) inerba[R.glut[i]] = 1;
+            R.tflag = calloc(R.ntiles, 1);
+            for (int t = 0; t < R.ntiles; t++) { const uint8_t *p = R.tiles + (size_t)t * 256; for (int i = 0; i < 256; i++) if (inerba[p[i]]) { R.tflag[t] |= 1; break; } }
+            R.nlaghi = u16(&l);
+            for (int k = 0; k < R.nlaghi && k < 4; k++) {
+                struct Lago *L = &R.laghi[k]; L->mappa = u8(&l); L->x = s16(&l); L->y = s16(&l); L->w = u16(&l); L->h = u16(&l); L->F = u8(&l); L->fps = u8(&l) / 10.f;
+                for (int i = 0; i < 256; i++) L->pal[i] = u16(&l);
+                l.p += 256;                                            /* corrispondenza verso i tile: non serve più */
+                size_t fs2 = (size_t)L->w * L->h; L->fr = malloc(fs2 * L->F); memcpy(L->fr, l.p, fs2 * L->F); l.p += fs2 * L->F;
+                for (int f = 1; f < L->F; f++) for (size_t i = 0; i < fs2; i++) L->fr[f * fs2 + i] ^= L->fr[i];
+            }
+            R.nfumi = u16(&l);
+            for (int k = 0; k < R.nfumi && k < 32; k++) { R.fumi[k].mappa = u8(&l); R.fumi[k].denso = u8(&l); R.fumi[k].x = s16(&l); R.fumi[k].y = s16(&l); R.fumi[k].sd = u16(&l); }
+            if (R.nfumi > 32) R.nfumi = 32;
+        }
+        free(b);
+    }
     return true;
 }

@@ -64,7 +64,7 @@ extern Negozio NEG;
 
 typedef struct { char t[96]; float vita; } Toast;
 extern Toast TOAST[3];
-typedef struct { int tab, sel, sel_msg; bool luci, vignetta; float scorri; int titolo_sel; bool conferma_nuova; } Ui;
+typedef struct { int tab, sel, sel_msg; bool luci, vignetta, effetti, bagliore; float scorri; int titolo_sel; bool conferma_nuova; } Ui;
 extern Ui UI;
 
 /* gioco.c */

@@ -50,6 +50,11 @@ typedef struct {
     int nspr; uint16_t spal[256]; SprInfo *spr; uint8_t *sdat;
     int nimg; Img *img;
     int nitem;
+    /* animazioni del terreno (anim.dat) */
+    int gN, gF; uint16_t gpal[256]; uint8_t glut[256]; uint8_t *gfr;      /* erba: gF fotogrammi gN×gN, glut = indice del tile «cotto» */
+    uint8_t *tflag;                                                       /* per tile: bit 0 = contiene erba che si muove */
+    int nlaghi; struct Lago { int mappa, x, y, w, h, F; float fps; uint16_t pal[256]; uint8_t *fr; } laghi[4];
+    int nfumi; struct Fumo { int mappa, denso, x, y, sd; } fumi[32];
 } Risorse;
 extern Risorse R;
 bool risorse_carica(const char *base);

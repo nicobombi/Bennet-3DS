@@ -1,6 +1,7 @@
 /* schermo sopra: terreno, oggetti e personaggi ordinati per profondità, luci della notte, vignettatura, dissolvenze */
 #include "stato.h"
 #include "dati.h"
+#include "atmo.h"
 
 static int CX, CY;                         /* angolo in alto a sinistra della vista, in pixel del mondo */
 static uint8_t *ALFA; static int ALFA_N;   /* trasparenza delle chiome (per oggetto) */
@@ -10,10 +11,13 @@ void mondo_entra(void) {
 }
 
 /* ---------- sprite degli oggetti: righe RLE di indici nella palette ---------- */
-static void spr_blit(Sup *s, int id, int x, int y, int a, int taglio /* righe sotto questa (relativa) sempre piene */) {
+/* sw = spostamento in pixel della cima (vento), che cala verso la base come nelle piante del PC */
+static void spr_blit_v(Sup *s, int id, int x, int y, int a, int taglio, float sw, int base, float esp) {
     const SprInfo *si = &R.spr[id]; const uint8_t *p = R.sdat + si->off;
+    bool vento = sw > .3f || sw < -.3f; if (base < 1) base = 1;
     for (int j = 0; j < si->h; j++) {
         int n = *p++, yy = y + j, xx = x;
+        if (vento && j < base) xx += (int)lroundf(sw * powf((float)(base - j) / base, esp));
         bool vis = yy >= 0 && yy < s->h; int aa = j >= taglio ? 256 : a;
         for (int r = 0; r < n; r++) {
             xx += p[0]; int len = p[1]; const uint8_t *px = p + 2; p += 2 + len;
@@ -26,6 +30,7 @@ static void spr_blit(Sup *s, int id, int x, int y, int a, int taglio /* righe so
         }
     }
 }
+static void spr_blit(Sup *s, int id, int x, int y, int a, int taglio) { spr_blit_v(s, id, x, y, a, taglio, 0, 1, 1); }
 bool sprite_opaco(int id, int x, int y) {
     const SprInfo *si = &R.spr[id]; if (x < 0 || y < 0 || x >= si->w || y >= si->h) return false;
     const uint8_t *p = R.sdat + si->off;
@@ -38,6 +43,8 @@ bool sprite_opaco(int id, int x, int y) {
 /* ---------- terreno ---------- */
 static void terreno(Sup *s) {
     Mappa *m = M_ATT();
+    const uint8_t *g0 = NULL, *gk = NULL; int gmask = R.gN - 1;
+    if (R.gfr && !m->interno && UI.effetti) { size_t fs = (size_t)R.gN * R.gN; g0 = R.gfr; gk = R.gfr + (size_t)((int)(A.windT * R.gF) % R.gF) * fs; }
     int tx0 = CX >> 4, ty0 = CY >> 4; if (CX < 0) tx0 = -((-CX + 15) >> 4); if (CY < 0) ty0 = -((-CY + 15) >> 4);
     for (int ty = ty0; ty * T < CY + SH; ty++) {
         if (ty < 0 || ty >= m->H) continue;
@@ -46,7 +53,24 @@ static void terreno(Sup *s) {
             const uint8_t *src = R.tiles + (size_t)m->tmap[ty * m->W + tx] * 256;
             int sx = tx * T - CX, sy = ty * T - CY;
             int i0 = sx < 0 ? -sx : 0, i1 = sx + 16 > SW ? SW - sx : 16, j0 = sy < 0 ? -sy : 0, j1 = sy + 16 > SH ? SH - sy : 16;
-            for (int j = j0; j < j1; j++) { uint16_t *d = s->px + (sy + j) * SW + sx; const uint8_t *r = src + j * 16; for (int i = i0; i < i1; i++) d[i] = R.tpal[r[i]]; }
+            int tid = m->tmap[ty * m->W + tx];
+            if (gk && (R.tflag[tid] & 1)) {                       /* erba al vento: dove il terreno mostra l'erba «pura», il fotogramma giusto */
+                for (int j = j0; j < j1; j++) {
+                    uint16_t *d = s->px + (sy + j) * SW + sx; const uint8_t *r = src + j * 16; int wy = ((ty * T + j) & gmask) * R.gN;
+                    for (int i = i0; i < i1; i++) { int ti = r[i], q = wy + ((tx * T + i) & gmask); d[i] = R.glut[g0[q]] == ti ? R.gpal[gk[q]] : R.tpal[ti]; }
+                }
+            } else for (int j = j0; j < j1; j++) { uint16_t *d = s->px + (sy + j) * SW + sx; const uint8_t *r = src + j * 16; for (int i = i0; i < i1; i++) d[i] = R.tpal[r[i]]; }
+        }
+    }
+    /* acqua dei laghetti: il fotogramma corrente sopra il primo, «cotto» nel terreno */
+    for (int k = 0; k < R.nlaghi && UI.effetti; k++) {
+        struct Lago *L = &R.laghi[k]; if (L->mappa != S.mappa || L->F < 2) continue;
+        int f = (int)(A.fxT * L->fps) % L->F; if (f == 0) continue;
+        int x0 = clampi(L->x - CX, 0, SW), x1 = clampi(L->x + L->w - CX, 0, SW), y0 = clampi(L->y - CY, 0, SH), y1 = clampi(L->y + L->h - CY, 0, SH);
+        size_t fs = (size_t)L->w * L->h; const uint8_t *f0 = L->fr, *fk = L->fr + f * fs;
+        for (int y = y0; y < y1; y++) {
+            size_t o = (size_t)(y + CY - L->y) * L->w + (CX - L->x); uint16_t *d = s->px + y * SW;
+            for (int x = x0; x < x1; x++) if (f0[o + x]) d[x] = L->pal[fk[o + x]];
         }
     }
 }
@@ -222,7 +246,20 @@ static void scena(Sup *s, bool titolo) {
             bool tocca = S.py < o->base && (sprite_opaco(o->s, (int)S.px - o->x, (int)S.py - 12 - o->y) || sprite_opaco(o->s, (int)S.px - o->x, (int)S.py - 26 - o->y));
             int tgt = tocca ? 128 : 255, v = ALFA[k]; v += (tgt - v) / 4 + (tgt > v ? 1 : tgt < v ? -1 : 0); ALFA[k] = clampi(v, 128, 255); a = ALFA[k] >= 255 ? 256 : ALFA[k];
         }
-        spr_blit(s, o->s, o->x - CX, o->y - CY, a, a < 256 ? o->base - o->y - 10 : 9999);
+        float sw = 0; int bs = o->base - o->y; float esp = 1.4f;
+        if (UI.effetti && (o->chioma == 1 || o->chioma >= 16)) {
+            float tx = o->x / 16.f, ty = o->base / 16.f, ph = A.fxT * .45f - tx * .07f - ty * .025f;   /* l'onda avanza da ovest verso est */
+            float w1 = .5f + .5f * sinf(ph * 6.2832f), w2 = .5f + .5f * sinf(ph * 9.1f + tx * .7f);
+            float v = clampf((.2f + .6f * w1 + .2f * w2) * (.55f + .55f * A.gust), 0, 1);
+            if (o->chioma >= 16) { sw = roundf(v * 6) / 6 * (o->chioma - 16); bs -= 3; }
+            else { sw = (v * 2.2f - .6f) * 1.6f; esp = 1.8f; }
+        }
+        spr_blit_v(s, o->s, o->x - CX, o->y - CY, a, a < 256 ? o->base - o->y - 10 : 9999, sw * A.dir, bs, esp);
+    }
+    /* fumo dei camini e dei falò: sopra a tutto, come nel PC */
+    for (int i = 0; i < R.nfumi; i++) if (R.fumi[i].mappa == S.mappa) {
+        float ox = R.fumi[i].x * T + 8, oy = R.fumi[i].y * T + 8;
+        if (ox > CX - 60 && ox < CX + SW + 60 && oy > CY - 20 && oy < CY + SH + 120) fumo_disegna(s, CX, CY, ox, oy, R.fumi[i].sd, R.fumi[i].denso, A.fxT);
     }
     while (e < ne) ent_disegna(s, E[e++].k);
     if (PS.ok && S.mappa == 0) guinzaglio(s);
@@ -245,14 +282,95 @@ static void luce(float x, float y, float r, int cr, int cg, int cb, float a) {
         int q = j * LW + i; LR[q] += (int)(kr * f); LG[q] += (int)(kg * f); LB[q] += (int)(kb * f);
     }
 }
+/* ombre delle nuvole sulla mappa di luce (come nel PC: colore del cielo, 17% di giorno) */
+static void nuvole(void) {
+    float al = .17f * A.giorno; if (al < .01f || !UI.effetti) return;
+    int k = (int)(al * 256), cr = 26 * 16, cg = 34 * 16, cb = 70 * 16;
+    for (int i = 0; i < 6; i++) {
+        Nuvola *c = &A.nv[i]; int w = A.mw[c->m], h = A.mh[c->m]; const uint8_t *m = A.maschera[c->m];
+        int nx = (int)lroundf(c->x) - CX, ny = (int)lroundf(c->y) - CY;
+        int j0 = clampi(ny / 2, 0, LH), j1 = clampi((ny + h) / 2 + 1, 0, LH), i0 = clampi(nx / 2, 0, LW), i1 = clampi((nx + w) / 2 + 1, 0, LW);
+        for (int j = j0; j < j1; j++) { int my = j * 2 - ny; if (my < 0 || my >= h) continue;
+            for (int ii = i0; ii < i1; ii++) { int mx = ii * 2 - nx; if (mx < 0 || mx >= w || !m[my * w + mx]) continue;
+                int q = j * LW + ii; LR[q] += ((cr - LR[q]) * k) >> 8; LG[q] += ((cg - LG[q]) * k) >> 8; LB[q] += ((cb - LB[q]) * k) >> 8; } }
+    }
+}
+/* bagliore (come postBagliore del PC): le parti più luminose, elevate a potenza, sfocate in due misure e sommate in «screen» */
+#define QW (SW / 4)
+#define QH (SH / 4)
+static uint16_t GQ[3][QW * QH], GW[3][(QW / 2) * (QH / 2)], GH[3][LW * LH];
+static void bagliore(Sup *s, float forza, int passi) {
+    if (forza <= .01f) return;
+    static int turno = 0; static bool pronto = false;
+    if (pronto && (++turno & 1)) goto applica;                /* la sfocatura si ricalcola un fotogramma sì e uno no */
+    pronto = true;
+    for (int j = 0; j < QH; j++) for (int i = 0; i < QW; i++) {             /* media di 4 campioni per cella 4×4, poi potenza */
+        int r = 0, g = 0, b = 0;
+        for (int k = 0; k < 4; k++) { int c = s->px[(j * 4 + 1 + (k >> 1) * 2) * SW + i * 4 + 1 + (k & 1) * 2]; r += (c >> 11) << 3; g += ((c >> 5) & 63) << 2; b += (c & 31) << 3; }
+        int v[3] = { r * 4096 / 1020, g * 4096 / 1020, b * 4096 / 1020 };        /* 0..4096, poi v⁴ (v⁸ di giorno) */
+        for (int c = 0; c < 3; c++) { int x = (v[c] * v[c]) >> 12; x = (x * x) >> 12; if (passi > 2) x = (x * x) >> 12; GQ[c][j * QW + i] = (uint16_t)x; }
+    }
+    for (int c = 0; c < 3; c++) for (int j = 0; j < QH / 2; j++) for (int i = 0; i < QW / 2; i++) {
+        const uint16_t *q = GQ[c] + j * 2 * QW + i * 2; GW[c][j * (QW / 2) + i] = (q[0] + q[1] + q[QW] + q[QW + 1]) >> 2;
+    }
+    /* alla risoluzione della mappa di luce: interpolazione bilineare delle due sfocature (tabelle precalcolate) */
+    static struct { uint8_t q0, q1, fq, w0, w1, fw; } TX[LW], TY[LH]; static bool tab = false;
+    if (!tab) {
+        for (int i = 0; i < LW; i++) { float q = (i + .5f) / 2 - .5f, w = (i + .5f) / 4 - .5f; int a0 = clampi((int)floorf(q), 0, QW - 1), b0 = clampi((int)floorf(w), 0, QW / 2 - 1);
+            TX[i].q0 = a0; TX[i].q1 = clampi(a0 + 1, 0, QW - 1); TX[i].fq = (uint8_t)clampi((int)((q - floorf(q)) * 256), 0, 255); TX[i].w0 = b0; TX[i].w1 = clampi(b0 + 1, 0, QW / 2 - 1); TX[i].fw = (uint8_t)clampi((int)((w - floorf(w)) * 256), 0, 255); }
+        for (int j = 0; j < LH; j++) { float q = (j + .5f) / 2 - .5f, w = (j + .5f) / 4 - .5f; int a0 = clampi((int)floorf(q), 0, QH - 1), b0 = clampi((int)floorf(w), 0, QH / 2 - 1);
+            TY[j].q0 = a0; TY[j].q1 = clampi(a0 + 1, 0, QH - 1); TY[j].fq = (uint8_t)clampi((int)((q - floorf(q)) * 256), 0, 255); TY[j].w0 = b0; TY[j].w1 = clampi(b0 + 1, 0, QH / 2 - 1); TY[j].fw = (uint8_t)clampi((int)((w - floorf(w)) * 256), 0, 255); }
+        tab = true;
+    }
+    int fa = (int)(fminf(1, forza * .75f) * 256), fb = (int)(fminf(1, forza) * 256), WW = QW / 2;
+    for (int c = 0; c < 3; c++) {
+        const uint16_t *Q = GQ[c], *W = GW[c]; uint16_t *O = GH[c];
+        for (int j = 0; j < LH; j++) {
+            const uint16_t *qa = Q + TY[j].q0 * QW, *qb = Q + TY[j].q1 * QW, *wa = W + TY[j].w0 * WW, *wb = W + TY[j].w1 * WW; int fqy = TY[j].fq, fwy = TY[j].fw;
+            for (int i = 0; i < LW; i++) {
+                int x0 = TX[i].q0, x1 = TX[i].q1, fq = TX[i].fq, y0 = TX[i].w0, y1 = TX[i].w1, fw = TX[i].fw;
+                int a0 = qa[x0] + (((qa[x1] - qa[x0]) * fq) >> 8), a1 = qb[x0] + (((qb[x1] - qb[x0]) * fq) >> 8), na = a0 + (((a1 - a0) * fqy) >> 8);
+                int b0 = wa[y0] + (((wa[y1] - wa[y0]) * fw) >> 8), b1 = wb[y0] + (((wb[y1] - wb[y0]) * fw) >> 8), nb = b0 + (((b1 - b0) * fwy) >> 8);
+                int x = (na * fa) >> 8, y = (nb * fb) >> 8;                      /* screen: x + y - x·y */
+                *O++ = (uint16_t)(x + y - ((x * y) >> 12));
+            }
+        }
+    }
+applica:
+    for (int j = 0; j < LH; j++) {
+        uint16_t *r0 = s->px + j * 2 * SW, *r1 = r0 + SW;
+        for (int i = 0; i < LW; i++) {
+            int q = j * LW + i, gr = GH[0][q] >> 4, gg = GH[1][q] >> 4, gb = GH[2][q] >> 4;   /* 0..256 */
+            if (gr < 3 && gg < 3 && gb < 3) continue;
+            uint16_t *p[4] = { r0 + i * 2, r0 + i * 2 + 1, r1 + i * 2, r1 + i * 2 + 1 };
+            for (int k = 0; k < 4; k++) {
+                int c = *p[k], R5 = c >> 11, G6 = (c >> 5) & 63, B5 = c & 31;
+                R5 += ((31 - R5) * gr) >> 8; G6 += ((63 - G6) * gg) >> 8; B5 += ((31 - B5) * gb) >> 8;   /* screen sul pixel */
+                *p[k] = (uint16_t)((R5 << 11) | (G6 << 5) | B5);
+            }
+        }
+    }
+}
+/* alone scuro intorno a Zambu (personaggio misterioso), sotto a tutto */
+static void aura_zambu(Sup *s) {
+    if (!ZB.c || ZB.stato == ZB_VIA) return;
+    int cx = (int)ZB.x - CX, cy = (int)ZB.y - 4 - CY; float al = ZB.alpha;
+    for (int y = clampi(cy - 60, 0, SH); y < clampi(cy + 60, 0, SH); y++) for (int x = clampi(cx - 60, 0, SW); x < clampi(cx + 60, 0, SW); x++) {
+        float d = sqrtf((float)((x - cx) * (x - cx) + (y - cy) * (y - cy))) / 60; if (d >= 1) continue;
+        float a = d < .5f ? .55f - .5f * d : .3f * (1 - (d - .5f) / .5f);
+        uint16_t *p = s->px + y * SW + x; *p = mix565(*p, rgb(6, 10, 9), (int)(a * al * 256));
+    }
+}
 static void illumina(Sup *s) {
     Mappa *m = M_ATT();
     float amb[3] = { S.amb[0], S.amb[1], S.amb[2] }, notte = S.notte;
     if (m->interno) { notte = 0; if (m->sotterraneo) { amb[0] = .25f; amb[1] = .28f; amb[2] = .35f; } else { amb[0] = .97f; amb[1] = .94f; amb[2] = .9f; } }
     int ar = (int)(amb[0] * 4096), ag = (int)(amb[1] * 4096), ab = (int)(amb[2] * 4096);
     for (int i = 0; i < LW * LH; i++) { LR[i] = ar; LG[i] = ag; LB[i] = ab; }
+    if (!m->interno) nuvole();
     if (UI.luci && (notte > .02f || m->interno)) {
-        if (notte > .02f) luce(S.px, S.py - 14, 34, 150, 170, 230, .14f * notte);
+        if (notte > .02f) luce(S.px, S.py - 14, 34, 150, 170, 230, .14f * notte);   /* un filo di luce lunare sul personaggio */
+        for (int i = 0; i < A.nl; i++) { float b = lucciola_luce(&A.l[i]); if (b > .02f) luce(A.l[i].x, A.l[i].y, 12, 200, 255, 140, .5f * b * notte); }
         for (int i = 0; i < m->nluci; i++) {
             Luce *l = &m->luci[i]; float k = l->interna && m->interno ? 1 : notte; if (k < .02f) continue;
             if (ZB.c && ZB.stato != ZB_FERMO && fabsf(l->x - (ZB.tx * T + 8)) < 20 && fabsf(l->y - ZB.ty * T) < 40) continue;   /* la brace di Zambu c'è solo quando c'è lui */
@@ -260,24 +378,30 @@ static void illumina(Sup *s) {
         }
         if (m->sotterraneo && S.fuori > .05f) for (int i = 0; i < m->ndiurne; i++) luce(m->diurne[i * 2], m->diurne[i * 2 + 1], 70, 255, 236, 200, .5f * S.fuori);
     }
-    if (!VIGN_OK) {                                           /* vignettatura: più scura verso gli angoli */
+    if (!VIGN_OK) {                                           /* vignettatura: sfumatura radiale verso un blu notte (8,10,28), 0 → 0,85 */
         for (int j = 0; j < LH; j++) for (int i = 0; i < LW; i++) {
-            float dx = (i + .5f) / LW * 2 - 1, dy = (j + .5f) / LH * 2 - 1, d = sqrtf(dx * dx * .9f + dy * dy * 1.1f) / 1.41f;
-            float v = clampf((d - .35f) / .65f, 0, 1); VIGN[j * LW + i] = (uint8_t)(v * v * 255);
+            float dx = (i + .5f - LW / 2.f) * 2, dy = (j + .5f - LH / 2.f) * 2, d = sqrtf(dx * dx + dy * dy) / (sqrtf(SW * SW + SH * SH) / 2);
+            VIGN[j * LW + i] = (uint8_t)(clampf((d - .35f) / .65f, 0, 1) * .85f * 255);
         }
         VIGN_OK = true;
     }
     int forza = UI.vignetta ? (int)(((m->interno ? .3f : .1f) + .45f * notte) * 256) : 0;
+    float oro = UI.effetti ? fminf(1, A.oro) * .07f : 0;            /* ora dorata: un velo caldo (soft-light arancio) */
+    int tr = (int)((1 + oro * .9f) * 256), tg = (int)((1 + oro * .25f) * 256), tb = (int)((1 - oro * .7f) * 256);
     /* composizione: ogni cella della mappa di luce copre 2×2 pixel */
     for (int j = 0; j < LH; j++) {
         uint16_t *r0 = s->px + j * 2 * SW, *r1 = r0 + SW;
         for (int i = 0; i < LW; i++) {
-            int q = j * LW + i, v = 256 - ((VIGN[q] * forza) >> 8);
+            int q = j * LW + i, va = (VIGN[q] * forza) >> 8, vk = 256 - va;
             int mr = LR[q] > 4096 ? 4096 : LR[q], mg = LG[q] > 4096 ? 4096 : LG[q], mb = LB[q] > 4096 ? 4096 : LB[q];
-            mr = (mr * v) >> 12; mg = (mg * v) >> 12; mb = (mb * v) >> 12;   /* 0..256 */
-            if (mr >= 256 && mg >= 256 && mb >= 256) continue;
+            mr = (((mr * vk) >> 12) * tr) >> 8; mg = (((mg * vk) >> 12) * tg) >> 8; mb = (((mb * vk) >> 12) * tb) >> 8;   /* 0..256 */
+            if (mr >= 256 && mg >= 256 && mb >= 256 && va == 0) continue;
             uint16_t *p[4] = { r0 + i * 2, r0 + i * 2 + 1, r1 + i * 2, r1 + i * 2 + 1 };
-            for (int k = 0; k < 4; k++) { int c = *p[k]; *p[k] = (uint16_t)(((((c >> 11) * mr) >> 8) << 11) | (((((c >> 5) & 63) * mg) >> 8) << 5) | (((c & 31) * mb) >> 8)); }
+            for (int k = 0; k < 4; k++) {
+                int c = *p[k], R5 = ((c >> 11) * mr + 1 * va) >> 8, G6 = (((c >> 5) & 63) * mg + 2 * va) >> 8, B5 = ((c & 31) * mb + 3 * va) >> 8;   /* + blu notte (8,10,28) */
+                if (R5 > 31) R5 = 31; if (G6 > 63) G6 = 63; if (B5 > 31) B5 = 31;
+                *p[k] = (uint16_t)((R5 << 11) | (G6 << 5) | B5);
+            }
         }
     }
     /* vetri accesi dei lampioni, sopra l'ombra */
@@ -288,6 +412,8 @@ static void illumina(Sup *s) {
         if (v->interna) sup_somma(s, x - 2, y - 2, v->w + 4, v->h + 4, (int)(188 * .22f * k), (int)(212 * .22f * k), (int)(255 * .22f * k));
         else sup_somma(s, x - 2, y - 2, v->w + 4, v->h + 4, (int)(255 * .22f * k), (int)(211 * .22f * k), (int)(138 * .22f * k));
     }
+    if (!m->interno) atmo_lucciole(s, CX, CY);
+    if (UI.bagliore) bagliore(s, m->interno ? .45f : .35f + .95f * notte + .2f * fminf(1, A.oro), !m->interno && notte < .4f ? 3 : 2);
 }
 
 void mondo_disegna(Sup *s, bool titolo) {
@@ -298,8 +424,10 @@ void mondo_disegna(Sup *s, bool titolo) {
     S.camx = CX; S.camy = CY;
     if (MWp < SW || MHp < SH) sup_riempi(s, 0);
     terreno(s);
+    aura_zambu(s);
     raccoglibili(s);
     scena(s, titolo);
+    if (UI.effetti) atmo_mondo(s, CX, CY);
     illumina(s);
     if (S.fade >= 0 && !titolo) { float a = S.fade < .22f ? S.fade / .22f : fmaxf(0, 1 - (S.fade - .22f) / .33f); sup_rett_a(s, 0, 0, SW, SH, 0, (int)(a * 256)); }
 }

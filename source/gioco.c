@@ -1,6 +1,7 @@
 /* logica del gioco: personaggio, tempo, passaggi, Siro, Zambu, Andrea, dialoghi, inventario, salvataggi */
 #include "stato.h"
 #include "dati.h"
+#include "atmo.h"
 #include <stdarg.h>
 
 Stato S; Zambu ZB; Siro SI; Passeggio PS; Dialogo DLG; Negozio NEG; Toast TOAST[3]; Ui UI; Brillo BRILLI[4];
@@ -177,6 +178,7 @@ trovato:
     }
     if (ZB.c) zb_init();
     PS.ok = false; PS.parla = false;
+    atmo_entra(S.px, S.py);
     S.nome_luogo = 3; S.amb_ok = false; S.moving = false;
     mondo_entra();
     if (m->sotterraneo && S.q_stato == Q_ATTIVA && S.q_passo < 1) { S.q_passo = 1; toast("Quest aggiornata: %s", Q_TITOLO); }
@@ -372,7 +374,8 @@ static void parla(int chi) { if (chi == NPC_SIRO) siro_parla(); else if (chi == 
 /* ---------------- ciclo ---------------- */
 void gioco_inizia(void) {
     IT_SHOTA = item_cerca("shota"); IT_ORO = item_cerca("shotaDorata");
-    UI.luci = true; UI.vignetta = true;
+    UI.luci = true; UI.vignetta = true; UI.effetti = true; UI.bagliore = true;
+    atmo_inizia();
     stato_base(); S.schermata = SCH_TITOLO;
     Salva v; S.c_salvataggio = salva_leggi(&v);
     entra(0, 0, 0, true); S.minuti = 18.4f * 60;               /* sfondo del titolo: il parco al tramonto */
@@ -407,7 +410,7 @@ void gioco_passo(float dt, const Input *in) {
     for (int b = 0; b < 4; b++) if (BRILLI[b].t > 0) BRILLI[b].t += dt;
     if (S.nome_luogo > 0) S.nome_luogo -= dt;
     if (S.festa < 99) S.festa += dt;
-    if (S.schermata == SCH_TITOLO) { S.minuti += dt * 4; if (S.minuti > 21 * 60) S.minuti = 17 * 60; cielo(dt); ui_titolo_input(in); ps_aggiorna(dt); return; }
+    if (S.schermata == SCH_TITOLO) { S.minuti += dt * 4; if (S.minuti > 21 * 60) S.minuti = 17 * 60; cielo(dt); ui_titolo_input(in); ps_aggiorna(dt); atmo_passo(dt, S.camx, S.camy, M_ATT()->interno, S.notte, ora_del_giorno()); return; }
 
     bool usato = ui_input(in);
     if (DLG.aperto) { DLG.t += dt; int n = (int)(DLG.t / .03f); if (n > DLG.n) DLG.n = n; }
@@ -448,5 +451,6 @@ void gioco_passo(float dt, const Input *in) {
     raccogli();
     zb_aggiorna(dt);
     ps_aggiorna(dt);
+    atmo_passo(dt, S.camx, S.camy, M_ATT()->interno, S.notte, ora_del_giorno());
 }
 void debug_entra(int m, int x, int y) { entra(m, x, y, false); }

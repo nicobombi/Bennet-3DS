@@ -162,12 +162,13 @@ static void sotto_opz(Sup *s) {
     bottone(s, 164, 52, 140, 26, "Torna al titolo", false, true);
     snprintf(b, sizeof b, "Luci notturne: %s", SN(UI.luci)); bottone(s, 16, 84, 140, 26, b, false, true);
     snprintf(b, sizeof b, "Vignettatura: %s", SN(UI.vignetta)); bottone(s, 164, 84, 140, 26, b, false, true);
-    bottone(s, 16, 116, 288, 26, "Salva ed esci", false, true);
-    int y = 150; testo(s, 14, y, "Comandi", C_LEGNO2);
-    snprintf(b, sizeof b, "%d fps", S.fps); testo(s, BW - 14 - testo_largo(b), y, b, C_TENUE); y += 13;
-    static const char *C[] = { "Levetta / Croce: cammina", "Tieni premuto B: cammina piano", "A: parla, conferma", "L / R: oggetto in mano",
-        "X: scheda successiva   Y: scheda precedente", "START: opzioni   SELECT: mappa" };
-    for (int i = 0; i < 6; i++) { testo(s, 18, y, C[i], C_INCH); y += 12; }
+    snprintf(b, sizeof b, "Effetti ambientali: %s", SN(UI.effetti)); bottone(s, 16, 116, 140, 26, b, false, true);
+    snprintf(b, sizeof b, "Bagliore: %s", SN(UI.bagliore)); bottone(s, 164, 116, 140, 26, b, false, true);
+    bottone(s, 16, 148, 288, 26, "Salva ed esci", false, true);
+    int y = 182; testo(s, 14, y, "Comandi", C_LEGNO2);
+    snprintf(b, sizeof b, "%d fps", S.fps); testo(s, BW - 14 - testo_largo(b), y, b, C_TENUE); y += 12;
+    static const char *C[] = { "Levetta/Croce: cammina · B tenuto: piano · A: parla", "L / R: oggetto in mano · X / Y: cambia scheda", "START: opzioni · SELECT: mappa" };
+    for (int i = 0; i < 3; i++) { testo(s, 18, y, C[i], C_INCH); y += 12; }
 }
 static void sotto_dialogo(Sup *s) {
     ui_ritratto(s, DLG.chi, 12, 12, 4);
@@ -295,7 +296,9 @@ bool ui_input(const Input *in) {
         if (dentro(in, 164, 52, 140, 26)) { partita_salva(); S.schermata = SCH_TITOLO; S.c_salvataggio = true; UI.titolo_sel = 0; UI.conferma_nuova = false; }
         if (dentro(in, 16, 84, 140, 26)) UI.luci = !UI.luci;
         if (dentro(in, 164, 84, 140, 26)) UI.vignetta = !UI.vignetta;
-        if (dentro(in, 16, 116, 288, 26)) gioco_chiedi_uscita();
+        if (dentro(in, 16, 116, 140, 26)) UI.effetti = !UI.effetti;
+        if (dentro(in, 164, 116, 140, 26)) UI.bagliore = !UI.bagliore;
+        if (dentro(in, 16, 148, 288, 26)) gioco_chiedi_uscita();
     }
     return false;
 }

@@ -11,11 +11,14 @@ COSA C'E' IN QUESTA PRIMA VERSIONE
 - Zambu di notte (22:30-6:00): compra e rivende
 - Andrea con il barboncino sulle stradine (7:00-21:00), si puo' accarezzare il cane
 - Zaino da 36 posti (la prima fila e' la barra), salvataggio automatico
-Non ci sono (per tenerlo leggero): la Home animata, la modalita' Developer, gli effetti pesanti.
+- Effetti come su PC: erba e piante che ondeggiano al vento, alberi che si muovono, acqua del lago animata,
+  ombre delle nuvole, pollini e petali, scie di vento, lucciole di notte, fumo, ora dorata, bagliore delle luci
+  (si possono spegnere in Opzioni: Effetti ambientali / Bagliore)
+Non ci sono ancora: la Home animata, la modalita' Developer, le ombre del sole che girano durante il giorno.
 
 QUANTO PESA
-- File .cia: circa 7 MB
-- Memoria usata: circa 20 MB (il New 3DS XL ne mette a disposizione 124)
+- File .cia: circa 12 MB
+- Memoria usata: circa 40 MB (il New 3DS XL ne mette a disposizione 124)
 - Salvataggio: sdmc:/3ds/ValleDeiGermogli/salvataggio.bin
 
 INSTALLAZIONE (PC Windows, una volta sola)
@@ -49,7 +52,7 @@ SE QUALCOSA NON VA
   (file makerom ... win_x86_64.zip) e metti makerom.exe in strumenti\win\
 - Senza bannertool il gioco funziona lo stesso: solo il banner animato del menu HOME resta vuoto.
 - FBI non scarica: controlla che il PC e il 3DS siano sulla stessa rete e che il firewall lo permetta.
-- Se il gioco va lento di notte: Opzioni > Luci notturne: No.
+- Se il gioco va lento: Opzioni > Bagliore: No (e, se serve, Effetti ambientali: No).
 
 CARTELLE
 source/    codice C del gioco (disegno software su due schermi RGB565)
