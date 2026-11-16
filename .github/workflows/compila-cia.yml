@@ -1,0 +1,52 @@
+name: Compila CIA per 3DS
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  cia:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compila con devkitPro (devkitARM + libctru)
+        run: docker run --rm -v "$PWD":/progetto -w /progetto devkitpro/devkitarm:latest make -j4
+
+      - name: Scarica makerom e bannertool
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p strumenti/linux
+          url=$(curl -s https://api.github.com/repos/3DSGuy/Project_CTR/releases | jq -r '[.[].assets[] | select(.name | test("makerom.*(ubuntu|linux).*zip$"; "i"))][0].browser_download_url')
+          echo "makerom: $url"
+          curl -sL "$url" -o makerom.zip && unzip -o -q makerom.zip -d mr && find mr -type f -name makerom -exec cp {} strumenti/linux/ \;
+          chmod +x strumenti/linux/makerom
+          burl=$(curl -s https://api.github.com/repos/carstene1ns/3ds-bannertool/releases | jq -r '[.[].assets[] | select(.name | test("zip$"))][0].browser_download_url' || true)
+          echo "bannertool: $burl"
+          if [ -n "$burl" ] && [ "$burl" != "null" ]; then
+            curl -sL "$burl" -o bt.zip && unzip -o -q bt.zip -d bt && f=$(find bt -type f -name bannertool | grep -i linux | head -1) && [ -n "$f" ] && cp "$f" strumenti/linux/ && chmod +x strumenti/linux/bannertool || echo "bannertool non disponibile"
+          fi
+
+      - name: Crea il .cia
+        run: |
+          BANNER=""
+          if [ -x strumenti/linux/bannertool ] && strumenti/linux/bannertool makebanner -i cia/banner.png -a cia/banner.wav -o banner.bnr; then BANNER="-banner banner.bnr"; fi
+          strumenti/linux/makerom -f cia -o ValleDeiGermogli.cia -elf ValleDeiGermogli.elf -rsf cia/app.rsf -icon ValleDeiGermogli.smdh $BANNER -exefslogo -target t
+          ls -la ValleDeiGermogli.cia ValleDeiGermogli.3dsx
+
+      - name: Pubblica la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "build-${{ github.run_number }}" ValleDeiGermogli.cia ValleDeiGermogli.3dsx \
+            --repo "${{ github.repository }}" --target "${{ github.sha }}" \
+            --title "La Valle dei Germogli - build ${{ github.run_number }}" \
+            --notes "File .cia per FBI (Remote Install o SD > Install CIA) e .3dsx per Homebrew Launcher."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ValleDeiGermogli
+          path: |
+            ValleDeiGermogli.cia
+            ValleDeiGermogli.3dsx

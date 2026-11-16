@@ -1,0 +1,59 @@
+LA VALLE DEI GERMOGLI - Edizione New Nintendo 3DS
+==================================================
+
+Schermo sopra: solo il gioco, con orologio, giorno, monete, avvisi e dialoghi.
+Schermo sotto (touch): Zaino, Quest, Messaggi, Mappa, Opzioni, scelte dei dialoghi e bancarella di Zambu.
+
+COSA C'E' IN QUESTA PRIMA VERSIONE
+- Le 3 mappe con tutti i passaggi: Parco, Parcheggio sotterraneo, Palco
+- Ciclo giorno/notte (1 minuto di gioco ogni 0,7 s), lampioni e luci accese, parcheggio con la luce delle rampe
+- Siro e la quest della Shota (con la festa finale e la Shota Dorata)
+- Zambu di notte (22:30-6:00): compra e rivende
+- Andrea con il barboncino sulle stradine (7:00-21:00), si puo' accarezzare il cane
+- Zaino da 36 posti (la prima fila e' la barra), salvataggio automatico
+Non ci sono (per tenerlo leggero): la Home animata, la modalita' Developer, gli effetti pesanti.
+
+QUANTO PESA
+- File .cia: circa 7 MB
+- Memoria usata: circa 20 MB (il New 3DS XL ne mette a disposizione 124)
+- Salvataggio: sdmc:/3ds/ValleDeiGermogli/salvataggio.bin
+
+INSTALLAZIONE (PC Windows, una volta sola)
+1. Installa devkitPro: https://devkitpro.org/wiki/Getting_Started
+   Nell'installer seleziona "3DS Development".
+2. Estrai questa cartella dove vuoi (meglio un percorso senza apostrofi, es. C:\Giochi\Valle3DS).
+3. Doppio clic su CREA_E_INSTALLA.bat
+   - compila il gioco
+   - scarica da solo makerom e bannertool (serve internet la prima volta)
+   - crea ValleDeiGermogli.cia
+   - apre nel browser una pagina con il CODICE QR
+4. Sul 3DS: apri FBI > Remote Install > Scan QR Code, inquadra il codice e conferma con A.
+   Il 3DS e il PC devono essere sulla stessa rete Wi-Fi.
+   Se Windows chiede il permesso del firewall, consenti l'accesso sulle reti private.
+5. Quando FBI ha finito, chiudi la finestra nera. Trovi il gioco nel menu HOME.
+
+Per reinstallarlo senza ricompilare: SOLO_INSTALLA.bat.
+Linux / macOS: ./crea_cia.sh (servono devkitPro, makerom, python3; bannertool facoltativo).
+
+COMANDI
+Levetta o croce: cammina          B tenuto: cammina piano
+A: parla / conferma                L e R: oggetto in mano (barra)
+X / Y: scheda successiva / precedente
+START: Opzioni                     SELECT: Mappa
+Touch: schede, zaino (tocca un oggetto per leggerlo, poi un altro posto per spostarlo), scelte, bancarella.
+Il gioco si salva da solo; si salva anche quando chiudi lo schermo o torni al menu HOME.
+
+SE QUALCOSA NON VA
+- "devkitPro non trovato": installalo in C:\devkitPro (percorso predefinito).
+- "manca makerom.exe": scaricalo da https://github.com/3DSGuy/Project_CTR/releases
+  (file makerom ... win_x86_64.zip) e metti makerom.exe in strumenti\win\
+- Senza bannertool il gioco funziona lo stesso: solo il banner animato del menu HOME resta vuoto.
+- FBI non scarica: controlla che il PC e il 3DS siano sulla stessa rete e che il firewall lo permetta.
+- Se il gioco va lento di notte: Opzioni > Luci notturne: No.
+
+CARTELLE
+source/    codice C del gioco (disegno software su due schermi RGB565)
+romfs/     grafica e mappe compresse (tile a 256 colori, sprite RLE, LZ)
+cia/       icona, banner e impostazioni per il .cia
+strumenti/ script per il .cia, il server per FBI e il generatore del codice QR
+pc/        banco di prova per PC (facoltativo)

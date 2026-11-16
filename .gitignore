@@ -1,0 +1,9 @@
+build/
+*.elf
+*.smdh
+*.3dsx
+*.cia
+*.map
+pc/vdg
+strumenti/win/
+strumenti/linux/

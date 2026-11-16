@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Installa con FBI</title>
+<style>
+  :root { --carta: #f6e9cd; --bordo: #5c3a21; --inchiostro: #3a2618; --tenue: #806246; --fondo: #241c18; --oro: #f0c040; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--fondo); color: var(--inchiostro); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+         display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+  main { background: var(--carta); border: 4px solid var(--bordo); border-radius: 6px; max-width: 760px; width: 100%; padding: 28px;
+         display: grid; grid-template-columns: auto 1fr; gap: 28px; align-items: center; }
+  canvas { image-rendering: pixelated; background: #fff; border: 4px solid var(--bordo); display: block; max-width: 100%; }
+  h1 { margin: 0 0 6px; font-size: 1.6rem; line-height: 1.2; }
+  .sotto { color: var(--tenue); margin: 0 0 16px; }
+  ol { margin: 0 0 16px; padding-left: 1.2em; }
+  li { margin: 4px 0; }
+  code { background: #fff8e6; border: 1px solid #d9c49a; padding: 1px 6px; border-radius: 3px; word-break: break-all; font-size: .9em; }
+  .stato { background: #fff8e6; border-left: 4px solid var(--oro); padding: 8px 12px; font-size: .95em; }
+  @media (max-width: 640px) { main { grid-template-columns: 1fr; justify-items: center; } }
+</style>
+</head>
+<body>
+<main>
+  <canvas id="qr" width="330" height="330" aria-label="Codice QR per FBI"></canvas>
+  <div>
+    <h1>La Valle dei Germogli</h1>
+    <p class="sotto">Installazione sul New Nintendo 3DS con FBI</p>
+    <ol>
+      <li>Sul 3DS apri <b>FBI</b> e scegli <b>Remote Install</b>.</li>
+      <li>Scegli <b>Scan QR Code</b> e inquadra questo codice.</li>
+      <li>Conferma con <b>A</b>: il gioco si scarica e si installa.</li>
+      <li>Torna al menu HOME: trovi la nuova icona.</li>
+    </ol>
+    <p>Indirizzo: <code id="url">%%URL%%</code></p>
+    <p class="stato">Tieni aperta la finestra nera finché FBI non ha finito. Il 3DS e il PC devono essere sulla stessa rete Wi-Fi.</p>
+  </div>
+</main>
+<script src="qr.js"></script>
+<script>
+  const url = document.getElementById('url').textContent.trim();
+  const M = qrMatrice(url), N = M.length, bordo = 4, c = document.getElementById('qr');
+  const scala = Math.floor(330 / (N + bordo * 2)), lato = scala * (N + bordo * 2);
+  c.width = c.height = lato; const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, lato, lato); g.fillStyle = '#000';
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (M[y][x]) g.fillRect((x + bordo) * scala, (y + bordo) * scala, scala, scala);
+</script>
+</body>
+</html>
