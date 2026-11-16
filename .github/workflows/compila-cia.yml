@@ -18,11 +18,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p strumenti/linux
-          url=$(curl -s https://api.github.com/repos/3DSGuy/Project_CTR/releases | jq -r '[.[].assets[] | select(.name | test("makerom.*(ubuntu|linux).*zip$"; "i"))][0].browser_download_url')
+          url=$(gh api repos/3DSGuy/Project_CTR/releases --jq '[.[].assets[] | select(.name | test("makerom.*(ubuntu|linux).*zip$"; "i"))][0].browser_download_url')
           echo "makerom: $url"
           curl -sL "$url" -o makerom.zip && unzip -o -q makerom.zip -d mr && find mr -type f -name makerom -exec cp {} strumenti/linux/ \;
           chmod +x strumenti/linux/makerom
-          burl=$(curl -s https://api.github.com/repos/carstene1ns/3ds-bannertool/releases | jq -r '[.[].assets[] | select(.name | test("linux.*zip$"; "i"))][0].browser_download_url' || true)
+          burl=$(gh api repos/carstene1ns/3ds-bannertool/releases --jq '[.[].assets[] | select(.name | test("linux.*zip$"; "i"))][0].browser_download_url' || true)
           echo "bannertool: $burl"
           if [ -n "$burl" ] && [ "$burl" != "null" ]; then
             curl -sL "$burl" -o bt.zip && unzip -o -q bt.zip -d bt && f=$(find bt -type f -name bannertool | head -1) && [ -n "$f" ] && cp "$f" strumenti/linux/ && chmod +x strumenti/linux/bannertool || echo "bannertool non disponibile"
