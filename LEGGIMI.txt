@@ -10,6 +10,7 @@ COSA C'E' IN QUESTA PRIMA VERSIONE
 - Siro e la quest della Shota (con la festa finale e la Shota Dorata)
 - Zambu di notte (22:30-6:00): compra e rivende
 - Andrea con il barboncino sulle stradine (7:00-21:00), si puo' accarezzare il cane
+- Mostro Energia: Zambu lo vende a 10 monete; bevuto (Y) fa correre piu' veloce per 3 minuti
 - Zaino da 36 posti (la prima fila e' la barra), salvataggio automatico
 - Effetti come su PC: erba e piante che ondeggiano al vento, alberi che si muovono, acqua del lago animata,
   ombre delle nuvole, pollini e petali, scie di vento, lucciole di notte, fumo, ora dorata, bagliore delle luci
@@ -40,8 +41,8 @@ Linux / macOS: ./crea_cia.sh (servono devkitPro, makerom, python3; bannertool fa
 
 COMANDI
 Levetta o croce: cammina          B tenuto: cammina piano
-A: parla / conferma                L e R: oggetto in mano (barra)
-X / Y: scheda successiva / precedente
+A: parla / conferma                L e R: oggetto in mano (barra)  Y: usa l'oggetto in mano
+X: scheda successiva
 START: Opzioni                     SELECT: Mappa
 Touch: schede, zaino (tocca un oggetto per leggerlo, poi un altro posto per spostarlo), scelte, bancarella.
 Il gioco si salva da solo; si salva anche quando chiudi lo schermo o torni al menu HOME.

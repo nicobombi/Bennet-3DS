@@ -185,16 +185,17 @@ trovato:
 }
 
 /* ---------------- salvataggi ---------------- */
-#define SALVA_VER 1
+#define SALVA_VER 2
 typedef struct {
     char magia[4]; int ver; int mappa; float px, py; int dir; float minuti; int giorno, monete;
     Slot inv[NSLOT]; int mano, q_stato, q_passo; uint8_t raccolti[8]; int8_t mag[16]; int nmag; uint8_t msg_letto;
+    float mostro;                                    /* dalla versione 2 */
 } Salva;
 void partita_salva(void) {
     Salva v; memset(&v, 0, sizeof v); memcpy(v.magia, "VDG3", 4); v.ver = SALVA_VER;
     v.mappa = S.mappa; v.px = S.px; v.py = S.py; v.dir = S.dir; v.minuti = S.minuti; v.giorno = S.giorno; v.monete = S.monete;
     memcpy(v.inv, S.inv, sizeof v.inv); v.mano = S.mano; v.q_stato = S.q_stato; v.q_passo = S.q_passo;
-    memcpy(v.raccolti, S.raccolti, 8); memcpy(v.mag, S.mag, 16); v.nmag = S.nmag; v.msg_letto = S.msg_letto;
+    memcpy(v.raccolti, S.raccolti, 8); memcpy(v.mag, S.mag, 16); v.nmag = S.nmag; v.msg_letto = S.msg_letto; v.mostro = S.mostro_t;
     char tmp[300]; snprintf(tmp, sizeof tmp, "%s.tmp", PERCORSO_SALVA);
     FILE *f = fopen(tmp, "wb"); if (!f) { toast("Impossibile salvare sulla scheda SD"); return; }
     bool ok = fwrite(&v, sizeof v, 1, f) == 1; ok = fclose(f) == 0 && ok;
@@ -204,12 +205,13 @@ void partita_salva(void) {
 }
 static bool salva_leggi(Salva *v) {
     FILE *f = fopen(PERCORSO_SALVA, "rb"); if (!f) return false;
-    bool ok = fread(v, sizeof *v, 1, f) == 1; fclose(f);
-    return ok && !memcmp(v->magia, "VDG3", 4) && v->ver == SALVA_VER && v->mappa >= 0 && v->mappa < NMAPPE;
+    memset(v, 0, sizeof *v); size_t n = fread(v, 1, sizeof *v, f); fclose(f);
+    if (n >= offsetof(Salva, mostro) && v->ver == 1) { v->mostro = 0; n = sizeof *v; }      /* salvataggio vecchio: va benissimo */
+    return n == sizeof *v && !memcmp(v->magia, "VDG3", 4) && (v->ver == 1 || v->ver == SALVA_VER) && v->mappa >= 0 && v->mappa < NMAPPE;
 }
 static void stato_base(void) {
     memset(&S.inv, 0, sizeof S.inv); for (int i = 0; i < NSLOT; i++) S.inv[i].item = -1;
-    S.mano = 0; S.q_stato = Q_NO; S.q_passo = 0; memset(S.raccolti, 0, 8); S.nmag = 0; S.msg_letto = false;
+    S.mano = 0; S.mostro_t = 0; S.q_stato = Q_NO; S.q_passo = 0; memset(S.raccolti, 0, 8); S.nmag = 0; S.msg_letto = false;
     S.minuti = 6 * 60; S.giorno = 1; S.monete = 200; S.dir = D_GIU; S.festa = 99; S.fade = -1;
     DLG.aperto = NEG.aperto = false; UI.tab = TAB_ZAINO; UI.sel = -1;
     for (int i = 0; i < 3; i++) TOAST[i].vita = 0;
@@ -224,6 +226,7 @@ bool partita_carica(void) {
     stato_base();
     S.minuti = v.minuti; S.giorno = v.giorno; S.monete = v.monete; memcpy(S.inv, v.inv, sizeof S.inv); S.mano = clampi(v.mano, 0, NBARRA - 1);
     S.q_stato = v.q_stato; S.q_passo = v.q_passo; memcpy(S.raccolti, v.raccolti, 8); memcpy(S.mag, v.mag, 16); S.nmag = clampi(v.nmag, 0, 16); S.msg_letto = v.msg_letto;
+    S.mostro_t = clampf(v.mostro, 0, MOSTRO_DUR);
     for (int i = 0; i < NSLOT; i++) if (S.inv[i].item >= R.nitem || S.inv[i].n == 0) { S.inv[i].item = -1; S.inv[i].n = 0; }
     entra(v.mappa, 0, 0, false); S.px = v.px; S.py = v.py; S.dir = v.dir & 3;
     S.passo_dentro = passo_in((int)floorf(S.px / T), (int)floorf((S.py - 3) / T));
@@ -283,7 +286,7 @@ static void siro_parla(void) {
 static void zambu_parla(void) {
     dlg_apri(NPC_ZAMBU, "Zambu");
     dlg_pag(FRASI_ZAMBU[rnd() % NFRASI_ZAMBU], false);
-    if (S.nmag) dlg_sc("Compra", A_COMPRA);
+    dlg_sc("Compra", A_COMPRA);
     dlg_sc("Vendi", A_VENDI); dlg_sc("Arrivederci", A_CHIUDI);
 }
 static void andrea_parla(void) {
@@ -334,16 +337,22 @@ void negozio_apri(bool vendita) {
     if (vendita) {
         if (item_conta(IT_SHOTA)) { NEG.righe[NEG.nrighe] = IT_SHOTA; NEG.prezzi[NEG.nrighe++] = ACQ_SHOTA; }
         if (item_conta(IT_ORO)) { NEG.righe[NEG.nrighe] = IT_ORO; NEG.prezzi[NEG.nrighe++] = ACQ_ORO; }
+        if (item_conta(IT_MOSTRO)) { NEG.righe[NEG.nrighe] = IT_MOSTRO; NEG.prezzi[NEG.nrighe++] = 0; }   /* lo puoi provare a vendere... */
         snprintf(NEG.testa, sizeof NEG.testa, "%s", NEG.nrighe ? "Fammi vedere cos'hai. Pago in oro, subito." : "Non hai niente che mi interessi. Torna quando avrai qualcosa di raro.");
     } else {
+        if (IT_MOSTRO >= 0) { NEG.righe[NEG.nrighe] = IT_MOSTRO; NEG.prezzi[NEG.nrighe++] = 10; }       /* sempre disponibile */
         for (int i = 0; i < S.nmag; i++) { NEG.righe[NEG.nrighe] = S.mag[i]; NEG.prezzi[NEG.nrighe++] = S.mag[i] == IT_ORO ? RIV_ORO : S.mag[i] == IT_SHOTA ? RIV_SHOTA : 100; }
-        snprintf(NEG.testa, sizeof NEG.testa, "%s", NEG.nrighe ? "Roba buona, trovata in giro. Pagamento in oro." : "Stanotte non ho niente da vendere. Ripassa un'altra notte.");
+        snprintf(NEG.testa, sizeof NEG.testa, "%s", "Roba buona, trovata in giro. Pagamento in oro.");
     }
 }
 void negozio_chiudi(void) { NEG.aperto = false; }
 void negozio_esegui(int r) {
     if (r < 0 || r >= NEG.nrighe) return;
     int id = NEG.righe[r], p = NEG.prezzi[r];
+    if (NEG.vendita && id == IT_MOSTRO) {                 /* ...ma Zambu non la vuole nemmeno toccare */
+        dlg_apri(NPC_ZAMBU, "Zambu"); dlg_pag("Ehi, ehi, ehi. Quella roba non la tocco neanche con un bastone. Tienitela tu, e tienila lontana da me.", false);
+        dlg_sc("Vendi altro", A_VENDI); dlg_sc("Arrivederci", A_CHIUDI); return;
+    }
     if (NEG.vendita) {
         if (!item_togli(id)) return;
         S.monete += p; if (S.nmag < 16) S.mag[S.nmag++] = id;
@@ -373,6 +382,7 @@ static void parla(int chi) { if (chi == NPC_SIRO) siro_parla(); else if (chi == 
 
 /* ---------------- ciclo ---------------- */
 void gioco_inizia(void) {
+    mostro_registra();
     IT_SHOTA = item_cerca("shota"); IT_ORO = item_cerca("shotaDorata");
     UI.luci = true; UI.vignetta = true; UI.effetti = true; UI.bagliore = true;
     atmo_inizia();
@@ -412,6 +422,7 @@ void gioco_passo(float dt, const Input *in) {
     if (S.festa < 99) S.festa += dt;
     if (S.schermata == SCH_TITOLO) { S.minuti += dt * 4; if (S.minuti > 21 * 60) S.minuti = 17 * 60; cielo(dt); ui_titolo_input(in); ps_aggiorna(dt); atmo_passo(dt, S.camx, S.camy, M_ATT()->interno, S.notte, ora_del_giorno()); return; }
 
+    if (S.mostro_t > 0) { S.mostro_t -= dt; if (S.mostro_t <= 0) { S.mostro_t = 0; toast("L'effetto del Mostro Energia è finito"); } }
     bool usato = ui_input(in);
     if (DLG.aperto) { DLG.t += dt; int n = (int)(DLG.t / .03f); if (n > DLG.n) DLG.n = n; }
     bool fermo = usato || DLG.aperto || NEG.aperto || S.fade >= 0 || S.festa < FESTA_DUR;
@@ -426,7 +437,7 @@ void gioco_passo(float dt, const Input *in) {
     S.moving = l > .15f;
     if (S.moving) {
         if (l > 1) { ax /= l; ay /= l; }
-        float v = 75 * ((in->tenuti & TS_B) ? .45f : 1) * dt, mx = ax * v, my = ay * v;
+        float v = 75 * ((in->tenuti & TS_B) ? .45f : 1) * (S.mostro_t > 0 ? MOSTRO_BONUS : 1) * dt, mx = ax * v, my = ay * v;
         S.dir = fabsf(ax) > fabsf(ay) ? (ax > 0 ? D_DX : D_SX) : (ay > 0 ? D_GIU : D_SU);
         float ox = S.px, oy = S.py;
         if (!bloccato(S.px + mx, S.py)) S.px += mx;
@@ -454,3 +465,16 @@ void gioco_passo(float dt, const Input *in) {
     atmo_passo(dt, S.camx, S.camy, M_ATT()->interno, S.notte, ora_del_giorno());
 }
 void debug_entra(int m, int x, int y) { entra(m, x, y, false); }
+
+/* usa l'oggetto in mano (tasto Y o tocco sulla casella già scelta della barra) */
+bool usa_in_mano(void) {
+    Slot *sl = &S.inv[S.mano];
+    if (sl->item < 0 || DLG.aperto || NEG.aperto) return false;
+    if (sl->item != IT_MOSTRO) { toast("%s non si può usare", ITEMS[sl->item].nome); return false; }
+    bool prima = S.mostro_t > 0;
+    if (--sl->n <= 0) { sl->item = -1; sl->n = 0; }
+    S.mostro_t = MOSTRO_DUR;
+    toast(prima ? "Un altro Mostro Energia: l'effetto riparte da 3 minuti" : "Mostro Energia! Per 3 minuti corri più veloce");
+    partita_salva();
+    return true;
+}

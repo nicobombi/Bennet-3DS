@@ -57,6 +57,11 @@ void ui_disegna_sopra(Sup *s) {
     snprintf(b, sizeof b, "Giorno %d", S.giorno); testo(s, 10, 8, b, C_INCH);
     snprintf(b, sizeof b, "%d:%02d", h, mi); testo(s, 96 - 8 - testo_largo(b), 8, b, C_INCH);
     moneta(s, 10, 24, S.monete);
+    if (S.mostro_t > 0) {
+        int sec = (int)ceilf(S.mostro_t); char t[24]; snprintf(t, sizeof t, "Veloce %d:%02d", sec / 60, sec % 60);
+        pannello(s, 4, 42, 92, 16, C_CARTA); testo(s, 10, 45, t, rgb(70, 110, 10));
+        if (S.mostro_t > 10 || ((int)(S.t * 4) & 1)) sup_rett(s, 84, 46, 6, 8, rgb(151, 235, 4));
+    }
     float ora = ora_del_giorno(); sup_rett(s, 72, 25, 16, 9, mix565(rgb(120, 170, 220), rgb(30, 40, 80), (int)(S.notte * 256)));
     if (ora >= 6 && ora < 19.5f) sup_rett(s, 72 + (int)((ora - 6) / 13.5f * 13), 27, 3, 3, rgb(255, 214, 90));
     else { float k = fmodf(ora + 24 - 19.5f, 24) / 10.5f; sup_rett(s, 72 + (int)(clampf(k, 0, 1) * 13), 27, 3, 3, rgb(230, 235, 255)); }
@@ -100,7 +105,8 @@ static void slot_xy(int i, int *x, int *y) { *x = 16 + (i % 9) * 32; *y = 52 + (
 static bool dlg_scelte(void) { return DLG.i == DLG.npag - 1 && dlg_fine(); }
 
 static void icona_item(Sup *s, int item, int x, int y) {
-    const ItemDef *d = &ITEMS[item]; const Img *im = d->frames ? d->fr[(int)(S.t * 9) % d->frames] : d->icona; sup_img(s, im, x, y, 256);
+    const ItemDef *d = &ITEMS[item]; const Img *im = d->frames ? d->fr[(int)(S.t * 9) % d->frames] : d->icona;
+    if (im) sup_img(s, im, x + 8 - im->w / 2, y + 8 - im->h / 2, 256);   /* centrata: anche le icone alte (Mostro 12 × 22) */
 }
 static void sotto_zaino(Sup *s) {
     testo(s, 12, 36, "Zaino", C_INCH); moneta(s, BW - 16 - 12 - testo_largo("0000"), 36, S.monete);
@@ -119,8 +125,9 @@ static void sotto_zaino(Sup *s) {
     if (UI.sel >= 0 && S.inv[UI.sel].item >= 0) {
         const ItemDef *d = &ITEMS[S.inv[UI.sel].item];
         testo(s, 14, y, d->nome, C_LEGNO2); testo_a_capo(s, 14, y + 13, BW - 28, d->lore, C_TENUE, -1);
+        if (S.inv[UI.sel].item == IT_MOSTRO) testo(s, BW - 14 - testo_largo("Consumabile · Y per berla"), y, "Consumabile · Y per berla", rgb(168, 50, 62));
     } else if (UI.sel >= 0) testo(s, 14, y, "Tocca un altro posto per spostare. Tocca ancora per lasciare.", C_TENUE);
-    else testo_a_capo(s, 14, y, BW - 28, "La prima fila è la barra: L e R scelgono l'oggetto in mano. Tocca un oggetto per leggerlo, poi un altro posto per spostarlo.", C_TENUE, -1);
+    else testo_a_capo(s, 14, y, BW - 28, "La prima fila è la barra: L e R scelgono l'oggetto in mano, Y lo usa. Tocca un oggetto per leggerlo, poi un altro posto per spostarlo.", C_TENUE, -1);
 }
 static void casella(Sup *s, int x, int y, bool piena) { sup_rett(s, x, y, 8, 8, C_BORDO); sup_rett(s, x + 1, y + 1, 6, 6, piena ? C_VERDE : C_CARTA); }
 static void sotto_quest(Sup *s) {
@@ -167,7 +174,7 @@ static void sotto_opz(Sup *s) {
     bottone(s, 16, 148, 288, 26, "Salva ed esci", false, true);
     int y = 182; testo(s, 14, y, "Comandi", C_LEGNO2);
     snprintf(b, sizeof b, "%d fps", S.fps); testo(s, BW - 14 - testo_largo(b), y, b, C_TENUE); y += 12;
-    static const char *C[] = { "Levetta/Croce: cammina · B tenuto: piano · A: parla", "L / R: oggetto in mano · X / Y: cambia scheda", "START: opzioni · SELECT: mappa" };
+    static const char *C[] = { "Levetta/Croce: cammina · B tenuto: piano · A: parla", "L / R: oggetto in mano · Y: usalo · X: cambia scheda", "START: opzioni · SELECT: mappa" };
     for (int i = 0; i < 3; i++) { testo(s, 18, y, C[i], C_INCH); y += 12; }
 }
 static void sotto_dialogo(Sup *s) {
@@ -188,7 +195,7 @@ static void sotto_negozio(Sup *s) {
         int y = 58 + r * 30, id = NEG.righe[r]; bool sel = r == NEG.sel;
         sup_rett(s, 14, y, BW - 28, 28, sel ? rgb(250, 226, 160) : C_CARTA2);
         icona_item(s, id, 20, y + 6); testo(s, 42, y + 9, ITEMS[id].nome, C_INCH);
-        char b[24]; snprintf(b, sizeof b, "%s%d", NEG.vendita ? "+" : "", NEG.prezzi[r]); sup_img(s, img("moneta"), 168, y + 9, 256); testo(s, 180, y + 9, b, C_INCH);
+        char b[24]; if (NEG.vendita && id == IT_MOSTRO) snprintf(b, sizeof b, "—"); else snprintf(b, sizeof b, "%s%d", NEG.vendita ? "+" : "", NEG.prezzi[r]); sup_img(s, img("moneta"), 168, y + 9, 256); testo(s, 180, y + 9, b, C_INCH);
         bottone(s, BW - 84, y + 3, 64, 22, NEG.vendita ? "Vendi" : "Compra", sel, NEG.vendita || S.monete >= NEG.prezzi[r]);
     }
     bottone(s, (BW - 100) / 2, BH - 40, 100, 26, "Chiudi", false, true);
@@ -276,7 +283,7 @@ bool ui_input(const Input *in) {
     if (in->giu & TS_L) S.mano = (S.mano + NBARRA - 1) % NBARRA;
     if (in->giu & TS_R) S.mano = (S.mano + 1) % NBARRA;
     if (in->giu & TS_X) UI.tab = (UI.tab + 1) % NTAB;
-    if (in->giu & TS_Y) UI.tab = (UI.tab + NTAB - 1) % NTAB;
+    if (in->giu & TS_Y) usa_in_mano();
     if (in->giu & TS_START) UI.tab = TAB_OPZ;
     if (in->giu & TS_SELECT) UI.tab = TAB_MAPPA;
     if (!in->tocco_nuovo) return false;
@@ -287,7 +294,7 @@ bool ui_input(const Input *in) {
             if (UI.sel == i) UI.sel = -1;
             else if (UI.sel >= 0 && S.inv[UI.sel].item >= 0) { Slot t = S.inv[i]; S.inv[i] = S.inv[UI.sel]; S.inv[UI.sel] = t; UI.sel = -1; }
             else UI.sel = S.inv[i].item >= 0 ? i : -1;
-            if (i < NBARRA) S.mano = i;
+            if (i < NBARRA) { if (S.mano == i && S.inv[i].item == IT_MOSTRO) { UI.sel = -1; usa_in_mano(); return false; } S.mano = i; }
             return false;
         }
     }

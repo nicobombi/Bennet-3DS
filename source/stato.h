@@ -33,6 +33,7 @@ typedef struct {
     float nome_luogo;                             /* timer del nome della mappa in alto */
     bool c_salvataggio;                           /* esiste un salvataggio (titolo) */
     int fps; int camx, camy;
+    float mostro_t;                               /* secondi di Mostro Energia ancora attivi (salvato) */
 } Stato;
 typedef struct { float x, y, t; } Brillo;
 extern Brillo BRILLI[4];
@@ -86,6 +87,11 @@ float ora_del_giorno(void);
 const char *moscia(const char *s, char *buf, int cap);
 void debug_entra(int m, int x, int y);
 void gioco_chiedi_uscita(void);
+bool usa_in_mano(void);
+extern int IT_MOSTRO;
+void mostro_registra(void);
+#define MOSTRO_DUR 180.f
+#define MOSTRO_BONUS 1.25f
 
 /* mondo.c */
 void mondo_disegna(Sup *s, bool titolo);
